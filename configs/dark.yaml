@@ -1,0 +1,10 @@
+weekday:
+    family: Linux Biolinum G
+    color: '#aaaaaa'
+number:
+    family: Laila
+    color: '#aaaaaa'
+month:
+    family: Lobster
+shadow:
+    color: '#212121'
