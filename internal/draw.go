@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -8,12 +9,28 @@ import (
 	"github.com/ajstarks/svgo"
 )
 
-func Draw(w io.Writer, year int, month time.Month, layout LayoutType, style Style, background string) {
+func Draw(w io.Writer, year int, month time.Month, layout LayoutType, style Style, background string, ex int) {
 	paper := svg.New(w)
 	defer paper.End()
 
-	canvas := NewAlbumCanvas()
-	pos := canvas.Layout(layout)
+	var monthPos Pos
+	if s, ok := style.MonthStyle[int(month)]; ok {
+		if s.Layout != "" {
+			layout = s.Layout
+		}
+		monthPos = s.MonthPos
+	}
+
+	canvas := NewAlbumCanvas(ex)
+	pos := canvas.Layout(layout, ex)
+	if monthPos.X > 0 {
+		pos.Month.X = monthPos.X
+	}
+	if monthPos.Y > 0 {
+		pos.Month.Y = monthPos.Y
+	}
+
+	fmt.Printf("Month label position: %d %d\n", pos.Month.X, pos.Month.Y)
 	paper.StartviewUnit(canvas.SVG.Width, canvas.SVG.Height, "mm", canvas.X, canvas.Y, canvas.Width, canvas.Height)
 
 	// Background
@@ -75,4 +92,3 @@ func backMondayFrom(t time.Time) time.Time {
 		t = t.Add(-24 * time.Hour)
 	}
 }
-

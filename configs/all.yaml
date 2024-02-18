@@ -11,7 +11,7 @@ number:
 month:
     family: Lobster
     size: 150
-    color: yellow
+    color: white
     stroke: black
     strokewidth: 0.7
 shadow:
@@ -21,6 +21,8 @@ holiday:
     color: '#ba3333'
 weekend:
     color: '#ba4433'
+shortday:
+    color: '#772021'
 ghost: 0.4
 weekdays: [Пн, Вт, Ср, Чт, Пт, Сб, Вс]
 months: [Январь, Февраль, Март, Апрель, Май, Июнь, Июль, Август, Сентябрь, Октябрь, Ноябрь, Декабрь]
@@ -32,7 +34,11 @@ holidays:
         5: [1,2,3,8,9,10]
         6: [14]
         11: [4,5]
+        12: [31]
 notweekend:
     2021:
         2: [20]
+shortdays:
+    2021:
+        12: [30]
 
