@@ -1,7 +1,9 @@
 package internal
 
 import (
+	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"time"
 
@@ -30,20 +32,21 @@ func (s *ColorStyle) update(a ColorStyle) {
 	replace(&s.Ghost, a.Ghost)
 }
 
-type MonthStyle struct {
-	ColorStyle
-	Layout   LayoutType
-	MonthPos Pos
-}
-
 type Style struct {
-	ColorStyle
-	Weekdays   [7]string
-	Months     [12]string
-	Holidays   map[int]map[int][]int
-	NotWeekend map[int]map[int][]int
-	Shortdays  map[int]map[int][]int
-	MonthStyle map[int]MonthStyle
+	Size   Size
+	Extend int // Extend image width and height in mm after draw.
+	Grid   Pos
+
+	Layout       LayoutType
+	MonthName    string
+	MonthNamePos Pos
+	Holidays     []int
+	NotWeekend   []int
+	ShortDays    []int
+	Background   string
+
+	ColorStyle   ColorStyle
+	WeekdayNames [7]string
 }
 
 func DefaultStyle() Style {
@@ -58,12 +61,13 @@ func DefaultStyle() Style {
 			Shortday: Fill{Color: "#584848"},
 			Ghost:    "0.4",
 		},
-		Weekdays: weekdays(),
-		Months:   months(),
+		WeekdayNames: weekdays(),
+
+		Size: Size{Width: a4Long, Height: a4Short},
 	}
 }
 
-func LoadStyle(path string, month time.Month) (*Style, error) {
+func LoadStyle(path string) (*Style, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -74,10 +78,6 @@ func LoadStyle(path string, month time.Month) (*Style, error) {
 		return nil, err
 	}
 
-	if m, found := style.MonthStyle[int(month)]; found {
-		style.ColorStyle.update(m.ColorStyle)
-	}
-
 	return &style, nil
 }
 
@@ -85,14 +85,14 @@ func (s Style) day(t time.Time, cal time.Month) (string, SvgStyle) {
 	style := make(SvgStyle)
 	switch {
 	case s.isHoliday(t):
-		style = s.Holiday.style()
+		style = s.ColorStyle.Holiday.style()
 	case s.isWeekend(t):
-		style = s.Weekend.style()
+		style = s.ColorStyle.Weekend.style()
 	case s.isShortday(t):
-		style = s.Shortday.style()
+		style = s.ColorStyle.Shortday.style()
 	}
 	if t.Month() != cal {
-		style["opacity"] = s.Ghost
+		style["opacity"] = s.ColorStyle.Ghost
 	}
 	return strconv.Itoa(t.Day()), style
 }
@@ -101,26 +101,23 @@ func (s Style) isWeekend(day time.Time) bool {
 	if day.Weekday() != time.Saturday && day.Weekday() != time.Sunday {
 		return false
 	}
-	return !s.contains(s.NotWeekend, day)
+	return !slices.Contains(s.NotWeekend, day.Day())
 }
 
 func (s Style) isHoliday(day time.Time) bool {
-	return s.contains(s.Holidays, day)
+	return slices.Contains(s.Holidays, day.Day())
 }
 
 func (s Style) isShortday(day time.Time) bool {
-	return s.contains(s.Shortdays, day)
+	return slices.Contains(s.ShortDays, day.Day())
 }
 
-func (s Style) contains(cfg map[int]map[int][]int, day time.Time) bool {
-	if m, found := cfg[day.Year()][int(day.Month())]; found {
-		for _, d := range m {
-			if d == day.Day() {
-				return true
-			}
-		}
+func (s Style) String() string {
+	dump, err := yaml.Marshal(s)
+	if err != nil {
+		return fmt.Sprintf("Dump config error: %s\n", err)
 	}
-	return false
+	return string(dump)
 }
 
 type SvgStyle map[string]string
@@ -152,7 +149,7 @@ func (f Fill) style() SvgStyle {
 type Font struct {
 	Family      string
 	Size        string
-	Weight      string
+	Weight      string // bold
 	Color       string
 	Stroke      string
 	StrokeWidth string
@@ -185,14 +182,6 @@ func weekdays() [7]string {
 		weekdays[i] = time.Weekday(i).String()[:2]
 	}
 	return weekdays
-}
-
-func months() [12]string {
-	months := [12]string{}
-	for i := 0; i < 12; i++ {
-		months[i] = time.Month(i + 1).String()
-	}
-	return months
 }
 
 func replace(s *string, with string) {

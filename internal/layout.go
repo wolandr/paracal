@@ -7,25 +7,26 @@ import (
 const (
 	a4Long  = 297
 	a4Short = 210
-	spiral  = 120
-	magic   = 10 // Actually the week and numb font size difference
+	spiral  = 12 * posM // Shift from the top
+	magic   = 10        // Actually the week and numb font size difference
+	posM    = 10        // Multiplication for SVG canvas view.
 )
 
 type LayoutType string
 
 const (
-	LayoutLeft      LayoutType = "left"
-	LayoutRight     LayoutType = "right"
-	LayoutBottom    LayoutType = "bottom"
-	LayoutTop       LayoutType = "top"
-	LayoutSquare    LayoutType = "square"
-	LayoutSquareHor LayoutType = "square_h"
+	LayoutLeft    LayoutType = "left"
+	LayoutRight   LayoutType = "right"
+	LayoutBottom  LayoutType = "bottom"
+	LayoutTop     LayoutType = "top"
+	LayoutSquareV LayoutType = "square_v"
+	LayoutSquare  LayoutType = "square"
 )
 
 type Layout struct {
 	Weekday   Pos
 	Number    Pos
-	Month     Pos
+	MonthName Pos
 	Shadow    Rect
 	WeekGroup int
 	Vertical  bool
@@ -54,10 +55,14 @@ type Canvas struct {
 	SVG Size
 	Rect
 	grid Pos
+	ex   int
 }
 
 func (c Canvas) layout(rect Rect, shift Pos, weekGroup int, vertical bool) Layout {
-	pos := Pos{rect.Pos.X + c.grid.X/2 + shift.X, rect.Pos.Y + c.grid.Y/2 + shift.Y}
+	pos := Pos{
+		rect.Pos.X + c.grid.X/2 + shift.X,
+		rect.Pos.Y + c.grid.Y/2 + shift.Y,
+	}
 	var numbs Pos
 	if vertical {
 		pos.Y += c.grid.Y / 8
@@ -69,7 +74,7 @@ func (c Canvas) layout(rect Rect, shift Pos, weekGroup int, vertical bool) Layou
 	return Layout{
 		Weekday:   pos,
 		Number:    numbs,
-		Month:     Pos{c.Width / 2, c.Height / 7},
+		MonthName: Pos{c.Width / 2, c.Height / 7},
 		Shadow:    rect,
 		WeekGroup: weekGroup,
 		Vertical:  vertical,
@@ -82,56 +87,127 @@ func (c Canvas) LayoutSquare(vertical bool) Layout {
 	return c.layout(Rect{pos, size}, Pos{}, 1, vertical)
 }
 
-type AlbumCanvas struct{ Canvas }
-
-func NewAlbumCanvas(ex int) AlbumCanvas {
-	return AlbumCanvas{Canvas{
-		SVG:  Size{a4Long + ex, a4Short + ex},
-		Rect: Rect{Pos: Pos{0, 0}, Size: Size{(a4Long + ex) * 10, (a4Short + ex) * 10}},
-		grid: Pos{a4Short * 10 / 15, a4Short * 10 / 15},
-	}}
+func NewCanvas(size Size, gridDiv Pos, ex int) Canvas {
+	return Canvas{
+		SVG: Size{
+			Width:  size.Width + ex,
+			Height: size.Height + ex,
+		},
+		Rect: Rect{
+			Pos: Pos{0, 0},
+			Size: Size{
+				Width:  (size.Width + ex) * posM,
+				Height: (size.Height + ex) * posM,
+			},
+		},
+		grid: Pos{
+			X: size.Width * posM / gridDiv.X,
+			Y: size.Height * posM / gridDiv.Y,
+		},
+		ex: ex * posM,
+	}
 }
 
-func (c AlbumCanvas) Layout(t LayoutType, ex int) Layout {
-	ex = ex * 10
+func gridDim(layout LayoutType, album bool) Pos {
+	switch layout {
+	case LayoutLeft, LayoutRight:
+		if album {
+			return Pos{20, 15}
+		}
+		return Pos{15, 22}
+	case LayoutBottom, LayoutTop:
+		if album {
+			return Pos{21, 18}
+		}
+		return Pos{14, 18}
+	case LayoutSquareV:
+		if album {
+			return Pos{18, 18}
+		}
+		return Pos{9, 20}
+	case LayoutSquare:
+		if album {
+			return Pos{18, 18}
+		}
+		return Pos{10, 18}
+	}
+	panic("Undefined layout")
+}
+
+func (c Canvas) Layout(t LayoutType, album bool) Layout {
 	switch t {
 	case LayoutLeft:
-		return c.LayoutLeft(ex)
+		if album {
+			return c.LayoutLeftAlbum()
+		}
+		return c.LayoutLeftPortrait()
 	case LayoutRight:
-		return c.LayoutRight(ex)
+		if album {
+			return c.LayoutRightAlbum()
+		}
+		return c.LayoutRightPortrait()
 	case LayoutBottom:
-		return c.LayoutBottom(ex)
+		if album {
+			return c.LayoutBottomAlbum()
+		}
+		return c.layoutBottomPortrait()
 	case LayoutTop:
-		return c.LayoutTop(ex)
-	case LayoutSquare:
+		if album {
+			return c.LayoutTopAlbum()
+		}
+		return c.LayoutTopPortrait()
+	case LayoutSquareV:
 		return c.LayoutSquare(true)
-	case LayoutSquareHor:
+	case LayoutSquare:
 		return c.LayoutSquare(false)
 	}
 	panic("Undefined layout")
 }
 
-func (c AlbumCanvas) LayoutLeft(ex int) Layout {
+func (c Canvas) LayoutLeftAlbum() Layout {
+	ex := c.ex
 	width := c.grid.X<<2 + c.grid.X>>3
-	l := c.layout(Rect{Pos{c.X + ex/2, c.Y + ex/2}, Size{width, c.Height - ex}}, Pos{Y: spiral}, 2, true)
-	l.Month.X += width / 2
-	l.Month.Y += ex / 2
+	l := c.layout(
+		Rect{Pos{c.X + ex/2, c.Y + ex/2}, Size{width, c.Height - ex}},
+		Pos{Y: spiral},
+		2, true)
 	l.Shadow.Pos = Pos{c.X, c.Y}
 	l.Shadow.Size.Width += ex / 2
 	l.Shadow.Size.Height += ex
 	return l
 }
 
-func (c AlbumCanvas) LayoutRight(ex int) Layout {
-	l := c.LayoutLeft(ex)
-	l.Shadow.X = c.Width - l.Shadow.Width
-	l.Weekday.X += l.Shadow.X + c.grid.X*3 - ex/2
-	l.Number.X += l.Shadow.X - c.grid.X - ex/2
-	l.Month.X -= l.Shadow.Width
+func (c Canvas) LayoutLeftPortrait() Layout {
+	ex := c.ex
+	width := c.grid.X*3 + c.grid.X>>3
+	l := c.layout(
+		Rect{Pos{c.X + ex/2, c.Y + ex/2}, Size{width, c.Height - ex}},
+		Pos{Y: spiral},
+		3, true)
+	l.Shadow.Pos = Pos{c.X, c.Y}
+	l.Shadow.Size.Width += ex / 2
+	l.Shadow.Size.Height += ex
 	return l
 }
 
-func (c AlbumCanvas) LayoutBottom(ex int) Layout {
+func (c Canvas) LayoutRightAlbum() Layout {
+	l := c.LayoutLeftAlbum()
+	l.Shadow.X = c.Width - l.Shadow.Width
+	l.Weekday.X += l.Shadow.X + c.grid.X*3 - c.ex/2
+	l.Number.X += l.Shadow.X - c.grid.X - c.ex/2
+	return l
+}
+
+func (c Canvas) LayoutRightPortrait() Layout {
+	l := c.LayoutLeftPortrait()
+	l.Shadow.X = c.Width - l.Shadow.Width
+	l.Weekday.X += l.Shadow.X + c.grid.X*2 - c.ex/2
+	l.Number.X += l.Shadow.X - c.grid.X - c.ex/2
+	return l
+}
+
+func (c Canvas) LayoutBottomAlbum() Layout {
+	ex := c.ex
 	height := c.grid.Y*3 + magic
 	l := c.layout(
 		Rect{
@@ -146,28 +222,51 @@ func (c AlbumCanvas) LayoutBottom(ex int) Layout {
 	return l
 }
 
-func (c AlbumCanvas) LayoutTop(ex int) Layout {
+func (c Canvas) layoutBottomPortrait() Layout {
+	height := c.grid.Y*3 + c.grid.Y>>3
+	l := c.layout(
+		Rect{
+			Pos{c.X + c.ex/2, c.Height - height},
+			Size{c.Width, height},
+		},
+		Pos{},
+		2, false,
+	)
+	l.Shadow.Pos.X -= c.ex / 2
+	l.Shadow.Pos.Y -= c.ex / 2
+	l.Shadow.Width += c.ex
+	l.Shadow.Height += c.ex
+	return l
+}
+
+func (c Canvas) LayoutTopAlbum() Layout {
+	ex := c.ex
 	height := c.grid.Y * 3
-	l := c.layout(Rect{Pos{c.X + ex/2, c.Y + ex/2}, Size{c.Width - ex, height + spiral}}, Pos{magic, spiral}, 3, false)
-	l.Month.Y = c.Height - c.grid.Y
+	l := c.layout(
+		Rect{
+			Pos{c.X + ex/2, c.Y + ex/2},
+			Size{c.Width - ex, height + spiral},
+		},
+		Pos{magic, spiral},
+		3, false,
+	)
+	l.MonthName.Y = c.Height - c.grid.Y
 	l.Shadow.Pos = c.Pos
 	l.Shadow.Width += ex
 	l.Shadow.Height += ex / 2
 	return l
 }
 
-type PortraitCanvas struct{ Canvas }
+func (c Canvas) LayoutTopPortrait() Layout {
+	l := c.layout(
+		Rect{
+			Pos{c.X + c.ex/2, c.Y + c.ex/2},
+			Size{c.Width - c.ex, c.grid.Y*3 + spiral}},
+		Pos{Y: spiral},
+		2, false)
 
-func NewPortraitCanvas() PortraitCanvas {
-	return PortraitCanvas{Canvas{
-		SVG:  Size{a4Short, a4Long},
-		Rect: Rect{Pos: Pos{0, 0}, Size: Size{a4Short * 10, a4Long * 10}},
-		grid: Pos{a4Short * 10 / 15, a4Short * 10 / 15},
-	}}
-}
-
-func (c PortraitCanvas) layoutBottom() Layout {
-	fat := c.grid.Y*4 - magic
-	l := c.layout(Rect{Pos{Y: c.Height - fat}, Size{c.Width, fat}}, Pos{X: 45}, 2, false)
+	l.Shadow.Pos = c.Pos
+	l.Shadow.Width += c.ex
+	l.Shadow.Height += spiral + c.ex/2
 	return l
 }

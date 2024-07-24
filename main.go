@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -10,13 +11,14 @@ import (
 )
 
 var opt struct {
-	Style  flags.Filename `short:"s" long:"style" description:"Path to style configuration" default:"paracal.yaml"`
-	Layout string         `short:"l" long:"layout" choice:"left" choice:"right" choice:"bottom" choice:"top" choice:"square" choice:"square_h" description:"Calendar layout"`
-	Back   string         `short:"b" long:"back" description:"Background image path or background color in #hex format"`
-	Year   int            `short:"y" long:"year" description:"Year, 0 for current month" default:"0"`
-	Month  time.Month     `short:"m" long:"month" description:"Month [1-12], 0 for current month" default:"0"`
-	Output flags.Filename `short:"o" long:"output" description:"Output svg file" default:""`
-	Ext    int            `short:"e" long:"extend" description:"Extend canvas in mm" default:"0"`
+	Style     flags.Filename `short:"s" long:"style" description:"Path to style configuration" default:"paracal.yaml"`
+	Layout    string         `short:"l" long:"layout" choice:"left" choice:"right" choice:"bottom" choice:"top" choice:"square" choice:"square_v" description:"Calendar layout"`
+	Back      string         `short:"b" long:"back" description:"Background image path or background color in #hex format"`
+	Year      int            `short:"y" long:"year" description:"Year, 0 for current month" default:"0"`
+	Month     int            `short:"m" long:"month" description:"Month [1-12], 0 for current month" base:"10" default:"0"`
+	MonthName string         `short:"n" long:"name" description:"Month name" default:""`
+	Output    flags.Filename `short:"o" long:"output" description:"Output svg file" default:""`
+	Debug     bool           `long:"debug" description:"Dump applying style"`
 }
 
 func main() {
@@ -30,13 +32,29 @@ func main() {
 		opt.Year = now.Year()
 	}
 	if opt.Month == 0 {
-		opt.Month = now.Month()
+		opt.Month = int(now.Month())
 	}
 
-	style, err := internal.LoadStyle(string(opt.Style), opt.Month)
+	style, err := internal.LoadStyle(string(opt.Style))
 	if err != nil {
 		println("Failed to load style configuration,", err.Error())
 		os.Exit(1)
+	}
+
+	if opt.Year < 100 {
+		opt.Year += 2000
+	}
+
+	if opt.Layout != "" {
+		style.Layout = internal.LayoutType(opt.Layout)
+	}
+
+	if opt.Back != "" {
+		style.Background = opt.Back
+	}
+
+	if opt.MonthName != "" {
+		style.MonthName = opt.MonthName
 	}
 
 	f, err := os.Create(string(opt.Output))
@@ -44,7 +62,13 @@ func main() {
 		println("Invalid output,", err.Error())
 		os.Exit(1)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
-	internal.Draw(f, opt.Year, opt.Month, internal.LayoutType(opt.Layout), *style, opt.Back, opt.Ext)
+	if opt.Debug {
+		fmt.Printf("%s\n", style.String())
+	}
+
+	internal.Draw(f, opt.Year, time.Month(opt.Month), *style)
+
+	fmt.Printf("%s\n", opt.Output)
 }

@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -9,63 +8,66 @@ import (
 	"github.com/ajstarks/svgo"
 )
 
-func Draw(w io.Writer, year int, month time.Month, layout LayoutType, style Style, background string, ex int) {
+func Draw(w io.Writer, year int, month time.Month, style Style) {
 	paper := svg.New(w)
 	defer paper.End()
 
-	var monthPos Pos
-	if s, ok := style.MonthStyle[int(month)]; ok {
-		if s.Layout != "" {
-			layout = s.Layout
-		}
-		monthPos = s.MonthPos
+	isAlbum := style.Size.Width > style.Size.Height
+
+	if style.Grid.X == 0 || style.Grid.Y == 0 {
+		style.Grid = gridDim(style.Layout, isAlbum)
 	}
 
-	canvas := NewAlbumCanvas(ex)
-	pos := canvas.Layout(layout, ex)
-	if monthPos.X > 0 {
-		pos.Month.X = monthPos.X
+	canvas := NewCanvas(
+		Size{Width: style.Size.Width, Height: style.Size.Height},
+		style.Grid,
+		style.Extend)
+
+	layout := canvas.Layout(style.Layout, isAlbum)
+
+	if style.MonthNamePos.X > 0 {
+		layout.MonthName.X = (style.MonthNamePos.X + style.Extend/2) * posM
 	}
-	if monthPos.Y > 0 {
-		pos.Month.Y = monthPos.Y
+	if style.MonthNamePos.Y > 0 {
+		layout.MonthName.Y = (style.MonthNamePos.Y + style.Extend/2) * posM
 	}
 
-	fmt.Printf("Month label position: %d %d\n", pos.Month.X, pos.Month.Y)
 	paper.StartviewUnit(canvas.SVG.Width, canvas.SVG.Height, "mm", canvas.X, canvas.Y, canvas.Width, canvas.Height)
 
 	// Background
-	if strings.HasPrefix(background, "#") {
-		paper.Rect(0, 0, canvas.Width, canvas.Height, "fill:"+background)
-	} else if len(background) > 0 {
-		paper.Image(0, 0, canvas.Width, canvas.Height, background, `preserveAspectRatio="none"`)
+	if strings.HasPrefix(style.Background, "#") {
+		paper.Rect(0, 0, canvas.Width, canvas.Height, "fill:"+style.Background)
+	} else if len(style.Background) > 0 {
+		paper.Image(0, 0, canvas.Width, canvas.Height, style.Background, `preserveAspectRatio="none"`)
 	}
 
 	// Calendar text background
-	paper.Rect(pos.Shadow.X, pos.Shadow.Y, pos.Shadow.Width, pos.Shadow.Height, style.Shadow.style().String())
+	paper.Rect(layout.Shadow.X, layout.Shadow.Y, layout.Shadow.Width, layout.Shadow.Height,
+		style.ColorStyle.Shadow.style().String())
 
 	// Day of week text group
 	grid := Pos{canvas.grid.X, 0}
-	if pos.Vertical {
+	if layout.Vertical {
 		grid = Pos{0, canvas.grid.Y}
 	}
-	paper.Group(style.Weekday.style(), pos.Weekday.transform())
-	for i := 0; i < pos.WeekGroup*7; i++ {
+	paper.Group(style.ColorStyle.Weekday.style(), layout.Weekday.transform())
+	for i := 0; i < layout.WeekGroup*7; i++ {
 		fill := ""
 		if i%7 > 4 {
-			fill = style.Weekend.style().String()
+			fill = style.ColorStyle.Weekend.style().String()
 		}
-		paper.Text(grid.X*i, grid.Y*i, style.Weekdays[i%7], fill)
+		paper.Text(grid.X*i, grid.Y*i, style.WeekdayNames[i%7], fill)
 	}
 	paper.Gend()
 
 	// Numbers text group
-	paper.Group(style.Number.style(), pos.Number.transform())
+	paper.Group(style.ColorStyle.Number.style(), layout.Number.transform())
 	t := backMonday(year, month)
 	for i := 0; i < 42; i++ {
 		day, fill := style.day(t, month)
-		idx := i / (pos.WeekGroup * 7)
-		idy := i % (pos.WeekGroup * 7)
-		if !pos.Vertical {
+		idx := i / (layout.WeekGroup * 7)
+		idy := i % (layout.WeekGroup * 7)
+		if !layout.Vertical {
 			tmp := idx
 			idx = idy
 			idy = tmp
@@ -76,8 +78,7 @@ func Draw(w io.Writer, year int, month time.Month, layout LayoutType, style Styl
 	paper.Gend()
 
 	// Month name
-	paper.Text(pos.Month.X, pos.Month.Y, style.Months[month-1], style.Month.style())
-
+	paper.Text(layout.MonthName.X, layout.MonthName.Y, style.MonthName, style.ColorStyle.Month.style())
 }
 
 func backMonday(year int, month time.Month) time.Time {
