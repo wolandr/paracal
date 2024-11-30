@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strconv"
@@ -11,59 +12,63 @@ import (
 )
 
 type ColorStyle struct {
-	Weekday  Font
-	Number   Font
-	Month    Font
-	Shadow   Fill
-	Holiday  Fill
-	Weekend  Fill
-	Shortday Fill
-	Ghost    string
+	Weekday  SvgStyle // Header, like Mn, Tu...
+	Number   SvgStyle // Group style of all numbers (days)
+	Weekend  SvgStyle
+	Holiday  SvgStyle
+	Shortday SvgStyle
+	Ghost    SvgStyle // Adjacent month days style (opacity)
+	Shadow   SvgStyle // Expecting opacity and color of calendar background color
 }
 
-func (s *ColorStyle) update(a ColorStyle) {
-	s.Weekday.update(a.Weekday)
-	s.Number.update(a.Number)
-	s.Month.update(a.Month)
-	s.Shadow.update(a.Shadow)
-	s.Holiday.update(a.Holiday)
-	s.Weekend.update(a.Weekend)
-	s.Shortday.update(a.Shortday)
-	replace(&s.Ghost, a.Ghost)
+func (s *ColorStyle) apply(a ColorStyle) {
+	maps.Copy(s.Weekday, a.Weekday)
+	maps.Copy(s.Number, a.Number)
+	maps.Copy(s.Weekend, a.Weekend)
+	maps.Copy(s.Holiday, a.Holiday)
+	maps.Copy(s.Shortday, a.Shortday)
+	maps.Copy(s.Ghost, a.Ghost)
+	maps.Copy(s.Shadow, a.Shadow)
+}
+
+type Text struct {
+	Pos
+	Title string
+	Style SvgStyle
 }
 
 type Style struct {
 	Size   Size
 	Extend int // Extend image width and height in mm after draw.
 	Grid   Pos
+	Pos    Pos
 
-	Layout       LayoutType
-	MonthName    string
-	MonthNamePos Pos
-	Holidays     []int
-	NotWeekend   []int
-	ShortDays    []int
-	Background   string
+	Layout     LayoutType
+	Holidays   []int
+	NotWeekend []int
+	ShortDays  []int
+	Background string
 
 	ColorStyle   ColorStyle
 	WeekdayNames [7]string
+
+	Text []Text
 }
 
 func DefaultStyle() Style {
 	return Style{
+		//
+		Size: Size{Width: a4Long, Height: a4Short},
 		ColorStyle: ColorStyle{
-			Weekday:  Font{Size: "60", Color: "#333333"},
-			Number:   Font{Size: "80", Weight: "600", Color: "#333333"},
-			Month:    Font{Size: "150", Color: "#449955", Stroke: "gray"},
-			Shadow:   Fill{Opacity: "0.5", Color: "white"},
-			Holiday:  Fill{Color: "#b03333"},
-			Weekend:  Fill{Color: "#b03333"},
-			Shortday: Fill{Color: "#584848"},
-			Ghost:    "0.4",
+			Weekday:  map[string]string{"fill": "#333333", "font-size": "30", "text-anchor": "middle"},
+			Number:   map[string]string{"fill": "#333333", "font-size": "50", "text-anchor": "middle"},
+			Weekend:  map[string]string{"fill": "#b03333"},
+			Holiday:  map[string]string{"fill": "#b03333"},
+			Shortday: map[string]string{"fill": "#584848"},
+			Shadow:   map[string]string{"fill": "#ffffff", "opacity": "0.3"},
+			Ghost:    map[string]string{"opacity": "0.3"},
 		},
 		WeekdayNames: weekdays(),
-
-		Size: Size{Width: a4Long, Height: a4Short},
 	}
 }
 
@@ -73,10 +78,24 @@ func LoadStyle(path string) (*Style, error) {
 		return nil, err
 	}
 
-	style := DefaultStyle()
+	style := Style{}
 	if err := yaml.UnmarshalStrict(data, &style); err != nil {
 		return nil, err
 	}
+
+	// Apply defaults
+	s := DefaultStyle()
+	if style.Size.Width == 0 {
+		style.Size.Width = s.Size.Width
+	}
+	if style.Size.Height == 0 {
+		style.Size.Height = s.Size.Height
+	}
+	if len(style.WeekdayNames[0]) == 0 {
+		style.WeekdayNames = s.WeekdayNames
+	}
+	s.ColorStyle.apply(style.ColorStyle)
+	style.ColorStyle = s.ColorStyle
 
 	return &style, nil
 }
@@ -85,14 +104,14 @@ func (s Style) day(t time.Time, cal time.Month) (string, SvgStyle) {
 	style := make(SvgStyle)
 	switch {
 	case s.isHoliday(t):
-		style = s.ColorStyle.Holiday.style()
+		style = maps.Clone(s.ColorStyle.Holiday)
 	case s.isWeekend(t):
-		style = s.ColorStyle.Weekend.style()
+		style = maps.Clone(s.ColorStyle.Weekend)
 	case s.isShortday(t):
-		style = s.ColorStyle.Shortday.style()
+		style = maps.Clone(s.ColorStyle.Shortday)
 	}
 	if t.Month() != cal {
-		style["opacity"] = s.ColorStyle.Ghost
+		maps.Copy(style, s.ColorStyle.Ghost)
 	}
 	return strconv.Itoa(t.Day()), style
 }
@@ -130,50 +149,6 @@ func (s SvgStyle) String() string {
 		}
 	}
 	return style
-}
-
-type Fill struct {
-	Opacity string
-	Color   string
-}
-
-func (f *Fill) update(a Fill) {
-	replace(&f.Opacity, a.Opacity)
-	replace(&f.Color, a.Color)
-}
-
-func (f Fill) style() SvgStyle {
-	return SvgStyle{"opacity": f.Opacity, "fill": f.Color}
-}
-
-type Font struct {
-	Family      string
-	Size        string
-	Weight      string // bold
-	Color       string
-	Stroke      string
-	StrokeWidth string
-}
-
-func (f *Font) update(a Font) {
-	replace(&f.Family, a.Family)
-	replace(&f.Size, a.Size)
-	replace(&f.Weight, a.Weight)
-	replace(&f.Color, a.Color)
-	replace(&f.Stroke, a.Stroke)
-	replace(&f.StrokeWidth, a.StrokeWidth)
-}
-
-func (f Font) style() string {
-	return SvgStyle{
-		"text-align": "center", "fill-opacity": "1", "fill-rule": "nonzero", "text-anchor": "middle",
-		"font-family":  f.Family,
-		"font-size":    f.Size,
-		"font-weight":  f.Weight,
-		"fill":         f.Color,
-		"stroke":       f.Stroke,
-		"stroke-width": f.StrokeWidth,
-	}.String()
 }
 
 func weekdays() [7]string {

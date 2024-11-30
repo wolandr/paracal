@@ -1,0 +1,56 @@
+size: { width: 297, height: 210 }
+pos: { x: 10, y: 125 }
+extend: 4
+grid: { x: 27, y: 15 }
+
+layout: square
+holidays: [1, 2, 3, 6, 7, 8]
+
+colorstyle:
+  weekday:
+    font-family: Comfortaa # Edu AU VIC WA NT Hand
+    font-size: 30
+    font-weight: bold # 600
+    fill: white
+  number:
+    text-align: centrer
+    text-anchor: middle
+    font-family: Laila
+    font-size: 50
+    font-weight: normal # 400
+    fill: white
+    fill-opacity: 1
+    fill-rule: nonzero
+  weekend:
+    fill: white
+    font-weight: bold
+  holiday:
+    fill: white
+    font-weight: bold
+  shortday:
+    fill: "#efefef"
+  ghost:
+    opacity: 0.2
+  shadow:
+    opacity: 0.15
+    fill: black
+
+weekdaynames: [пн, вт, ср, чт, пт, сб, вс]
+
+text:
+  - title: "Январь"
+    pos: { x: 12, y: 120 }
+    style:
+      font-size: 70
+      font-family: Comfortaa
+      fill: white
+      stroke: ""
+      strok-ewidth: ""
+
+  - title: "Дальние дали в дали за горами"
+    pos: { x: 290, y: 202 }
+    style:
+      text-anchor: end
+      font-size: 50
+      font-family: Comfortaa
+      fill: white

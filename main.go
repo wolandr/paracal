@@ -11,14 +11,15 @@ import (
 )
 
 var opt struct {
-	Style     flags.Filename `short:"s" long:"style" description:"Path to style configuration" default:"paracal.yaml"`
-	Layout    string         `short:"l" long:"layout" choice:"left" choice:"right" choice:"bottom" choice:"top" choice:"square" choice:"square_v" description:"Calendar layout"`
-	Back      string         `short:"b" long:"back" description:"Background image path or background color in #hex format"`
-	Year      int            `short:"y" long:"year" description:"Year, 0 for current month" default:"0"`
-	Month     int            `short:"m" long:"month" description:"Month [1-12], 0 for current month" base:"10" default:"0"`
-	MonthName string         `short:"n" long:"name" description:"Month name" default:""`
-	Output    flags.Filename `short:"o" long:"output" description:"Output svg file" default:""`
-	Debug     bool           `long:"debug" description:"Dump applying style"`
+	Style  flags.Filename `short:"s" long:"style" description:"Path to style configuration" default:"paracal.yaml"`
+	Layout string         `short:"l" long:"layout" choice:"left" choice:"right" choice:"bottom" choice:"top" choice:"square" choice:"square_v" description:"Calendar layout"`
+	Back   string         `short:"b" long:"back" description:"Background image path or background color in #hex format"`
+	Year   int            `short:"y" long:"year" description:"Year, 0 for current month" default:"0"`
+	Month  int            `short:"m" long:"month" description:"Month [1-12], 0 for current month" base:"10" default:"0"`
+	X      int            `long:"posx" description:"X pos" default:"0"`
+	Y      int            `long:"posy" description:"Y pos" default:"0"`
+	Output flags.Filename `short:"o" long:"output" description:"Output svg file" default:""`
+	Debug  bool           `long:"debug" description:"Dump applying style"`
 }
 
 func main() {
@@ -53,8 +54,11 @@ func main() {
 		style.Background = opt.Back
 	}
 
-	if opt.MonthName != "" {
-		style.MonthName = opt.MonthName
+	if opt.X > 0 {
+		style.Pos.X = opt.X
+	}
+	if opt.Y > 0 {
+		style.Pos.Y = opt.Y
 	}
 
 	f, err := os.Create(string(opt.Output))
@@ -70,5 +74,5 @@ func main() {
 
 	internal.Draw(f, opt.Year, time.Month(opt.Month), *style)
 
-	fmt.Printf("%s\n", opt.Output)
+	// fmt.Printf("%s\n", opt.Output)
 }

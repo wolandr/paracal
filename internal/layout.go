@@ -54,21 +54,22 @@ type Rect struct {
 type Canvas struct {
 	SVG Size
 	Rect
-	grid Pos
-	ex   int
+	indentTop int // for spring perforation
+	grid      Pos
+	ex        int
 }
 
 func (c Canvas) layout(rect Rect, shift Pos, weekGroup int, vertical bool) Layout {
+	// Top-left text position
 	pos := Pos{
 		rect.Pos.X + c.grid.X/2 + shift.X,
 		rect.Pos.Y + c.grid.Y/2 + shift.Y,
 	}
-	var numbs Pos
+	numbs := Pos{pos.X, pos.Y + c.grid.Y}
+
 	if vertical {
 		pos.Y += c.grid.Y / 8
 		numbs = Pos{pos.X + c.grid.X, pos.Y + magic}
-	} else {
-		numbs = Pos{pos.X, pos.Y + c.grid.Y}
 	}
 
 	return Layout{
@@ -79,12 +80,6 @@ func (c Canvas) layout(rect Rect, shift Pos, weekGroup int, vertical bool) Layou
 		WeekGroup: weekGroup,
 		Vertical:  vertical,
 	}
-}
-
-func (c Canvas) LayoutSquare(vertical bool) Layout {
-	size := Size{c.grid.X * 7, c.grid.Y * 7}
-	pos := Pos{c.Width/2 - size.Width/2, c.Height/2 - size.Height/2}
-	return c.layout(Rect{pos, size}, Pos{}, 1, vertical)
 }
 
 func NewCanvas(size Size, gridDiv Pos, ex int) Canvas {
@@ -134,7 +129,7 @@ func gridDim(layout LayoutType, album bool) Pos {
 	panic("Undefined layout")
 }
 
-func (c Canvas) Layout(t LayoutType, album bool) Layout {
+func (c Canvas) Layout(t LayoutType, album bool, pos Pos) Layout {
 	switch t {
 	case LayoutLeft:
 		if album {
@@ -157,9 +152,9 @@ func (c Canvas) Layout(t LayoutType, album bool) Layout {
 		}
 		return c.LayoutTopPortrait()
 	case LayoutSquareV:
-		return c.LayoutSquare(true)
+		return c.LayoutSquare(pos, true)
 	case LayoutSquare:
-		return c.LayoutSquare(false)
+		return c.LayoutSquare(pos, false)
 	}
 	panic("Undefined layout")
 }
@@ -269,4 +264,15 @@ func (c Canvas) LayoutTopPortrait() Layout {
 	l.Shadow.Width += c.ex
 	l.Shadow.Height += spiral + c.ex/2
 	return l
+}
+
+func (c Canvas) LayoutSquare(pos Pos, vertical bool) Layout {
+	size := Size{c.grid.X * 7, c.grid.Y * 7}
+	if pos.X <= 0 {
+		pos.X = c.Width/2 - size.Width/2
+	}
+	if pos.Y <= 0 {
+		pos.Y = c.Height/2 - size.Height/2
+	}
+	return c.layout(Rect{pos, size}, Pos{}, 1, vertical)
 }
